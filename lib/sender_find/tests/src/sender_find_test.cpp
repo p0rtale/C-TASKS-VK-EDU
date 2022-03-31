@@ -8,11 +8,11 @@ extern "C" {
 }
 
 #ifndef TIME_ITERS
-#define TIME_ITERS 1
+#define TIME_ITERS 2
 #endif
 
 #ifndef STRESS_ITERS
-#define STRESS_ITERS 1
+#define STRESS_ITERS 2
 #endif
 
 #define RANDOM_SEED 42
@@ -23,7 +23,7 @@ extern "C" {
 #endif
 
 #ifndef MAILS_NUM
-#define MAILS_NUM 1000000
+#define MAILS_NUM 100000
 #endif
 
 #define PERIOD_START "2022-04-01"
