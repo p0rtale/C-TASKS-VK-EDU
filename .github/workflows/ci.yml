@@ -1,0 +1,154 @@
+on: push
+
+jobs:
+  build:
+
+    name: ubuntu
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install GTest
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgtest-dev -y 
+      - name: Install Valgrind
+        run: sudo apt-get install -y valgrind
+
+      - name: Install Gcovr
+        run: pip install gcovr
+
+      - name: Install Cpplint
+        run: pip install cpplint
+
+      - name: Install Cppcheck
+        run: sudo apt-get install -y cppcheck
+
+      - name: Install Clang-format
+        run: sudo apt-get install -y clang-format
+
+      - name: Install Scan-build
+        run: sudo apt-get install -y clang-tools
+
+      - name: Install Clang-tidy
+        run: sudo apt-get install clang-tidy
+
+      - name: Install Infer
+        run: | 
+          VERSION=1.1.0; \
+          curl -sSL "https://github.com/facebook/infer/releases/download/v$VERSION/infer-linux64-v$VERSION.tar.xz" \
+          | sudo tar -C /opt -xJ && \
+          sudo ln -s "/opt/infer-linux64-v$VERSION/bin/infer" /usr/local/bin/infer
+
+      - name: Build
+        run: | 
+          mkdir build
+          cmake -B build
+          make -C build
+
+      - name: Running tests
+        run: |
+          mkdir lib/sender_find/tests/data_consistent
+          mkdir lib/sender_find/tests/data_parallel
+          ctest --test-dir build --output-on-failure
+
+      - name: Measurements report
+        uses: actions/upload-artifact@v2
+        with:
+          name: Time report
+          path: |
+            lib/sender_find/tests/data_consistent/time.txt
+            lib/sender_find/tests/data_parallel/time.txt
+
+      - name: Code coverage
+        run: |
+          cmake -B build -D WITH_COVERAGE=ON
+          make -C build 
+          ctest --test-dir build --output-on-failure
+          mkdir coverage_report
+          gcovr -r . -f lib/mails/src/ -f lib/sender_find/src/ -f lib/utils/src/ --html --html-details -o \
+                coverage_report/report.html
+
+      - name: Coverage report
+        uses: actions/upload-artifact@v2
+        with:
+          name: Code coverage
+          path: coverage_report/
+
+      - name: Valgrind
+        run: |
+          cmake -B build -D VALGRIND=ON -D WITH_COVERAGE=OFF
+          make -C build
+          ctest --test-dir build -T memcheck
+          $(for file in ./build/Testing/Temporary/MemoryChecker.*.log; do if [ -s $file ]; then exit 1; fi; done)
+
+      - name: Address sanitizer
+        run: |
+          cmake -B build -D ADRESS_SANITIZER=ON -D VALGRIND=OFF
+          make -C build
+          ctest --test-dir build --output-on-failure
+
+      - name: Leak sanitizer
+        run: |
+          cmake -B build -D LEAK_SANITIZER=ON -D ADRESS_SANITIZER=OFF
+          make -C build 
+          ctest --test-dir build --output-on-failure
+
+      - name: Undefined sanitizer
+        run: |
+          cmake -B build -D UNDEFINED_SANITIZER=ON -D LEAK_SANITIZER=OFF
+          make -C build
+          ctest --test-dir build --output-on-failure
+
+      - name: Thread sanitizer
+        run: | 
+          cmake -B build -D THREAD_SANITIZER=ON -D UNDEFINED_SANITIZER=OFF
+          make -C build
+          ctest --test-dir build --output-on-failure
+
+      - name: Cpplint
+        run: |
+          cpplint lib/mails/src/* lib/mails/include/* \
+                  lib/sender_find/src/* lib/sender_find/include/* \
+                  lib/utils/src/* lib/utils/include/* \
+                  lib/errors/include/* project/src/*
+
+      - name: Cppcheck
+        run: |
+          cppcheck --enable=style,performance,portability --inconclusive \
+                   --suppress=missingIncludeSystem --error-exitcode=1 \
+                   lib/mails/src/* -I lib/mails/include/ \
+                   lib/sender_find/src/* -I lib/sender_find/include/ \
+                   lib/utils/src/* -I lib/utils/include/ \
+                   -I lib/errors/include/ project/src/* -I project/include/
+
+      - name: Clang-format
+        run: |
+          clang-format --Werror --dry-run \
+                       lib/mails/src/* lib/mails/include/* \
+                       lib/mails/tests/src/* \
+                       lib/sender_find/src/* lib/sender_find/include/* \
+                       lib/sender_find/tests/src/* \
+                       lib/utils/src/* lib/utils/include/* \
+                       lib/utils/tests/src/* \
+                       project/src/*
+
+      - name: Clang-tidy
+        run: |
+          clang-tidy-10 -warnings-as-errors=* -p ./build/compile_commands.json \
+                        project/src/* lib/mails/src/* lib/sender_find/src/* lib/utils/src/*
+
+      - name: Scan-build
+        run: |
+          mkdir scan_build
+          cd scan_build
+          scan-build cmake .. -D WITH_TESTS=OFF
+          scan-build make
+
+      - name: Infer
+        run: |
+          mkdir infer_build
+          cd infer_build
+          infer compile -- cmake .. -D WITH_TESTS=OFF
+          infer run -- make

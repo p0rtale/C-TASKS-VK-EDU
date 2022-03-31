@@ -1,0 +1,10 @@
+add_executable(main src/main.c src/data_read.c)
+target_include_directories(main PUBLIC include)
+target_link_libraries(main mails)
+
+option(WITH_MULTIPROCESSING "Use multiprocessing" YES)
+if(WITH_MULTIPROCESSING)
+    target_link_libraries(main sender_find_parallel)
+else()
+    target_link_libraries(main sender_find_consistent)
+endif()
