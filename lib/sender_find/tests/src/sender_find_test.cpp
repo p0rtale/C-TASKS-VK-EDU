@@ -8,11 +8,11 @@ extern "C" {
 }
 
 #ifndef TIME_ITERS
-#define TIME_ITERS 3
+#define TIME_ITERS 1
 #endif
 
 #ifndef STRESS_ITERS
-#define STRESS_ITERS 3
+#define STRESS_ITERS 1
 #endif
 
 #define RANDOM_SEED 42
